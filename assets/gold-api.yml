@@ -1,0 +1,213 @@
+openapi: 3.0.0
+info:
+  title: VNAppMob Gold Price API
+  version: 2.0
+  description: API for requesting access and retrieving/updating gold prices from SJC, DOJI, and PNJ.
+servers:
+  - url: https://api.vnappmob.com
+paths:
+  /api/request_api_key:
+    get:
+      summary: Request API Key
+      description: Request an API key to access gold price data. The key is valid for 15 days.
+      parameters:
+        - name: scope
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [gold]
+          description: Scope of the API key. Use "gold" for gold price access.
+      responses:
+        '200':
+          description: API key successfully generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  api_key:
+                    type: string
+        '400':
+          description: Bad Request
+        '403':
+          description: Forbidden
+
+  /api/v2/gold/sjc:
+    get:
+      summary: Get SJC Gold Price
+      parameters:
+        - name: date_from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: date_to
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        buy_1l:
+                          type: number
+                        sell_1l:
+                          type: number
+        '400':
+          description: Bad Request
+        '403':
+          description: Forbidden
+      security:
+        - bearerAuth: []
+    post:
+      summary: Post SJC Gold Price
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                buy_1l:
+                  type: number
+                sell_1l:
+                  type: number
+                buy_1c:
+                  type: number
+                sell_1c:
+                  type: number
+                buy_nhan1c:
+                  type: number
+                sell_nhan1c:
+                  type: number
+                buy_trangsuc49:
+                  type: number
+                sell_trangsuc49:
+                  type: number
+      responses:
+        '201':
+          description: Created
+        '400':
+          description: Bad Request
+        '403':
+          description: Forbidden
+      security:
+        - bearerAuth: []
+
+  /api/v2/gold/doji:
+    get:
+      summary: Get DOJI Gold Price
+      parameters:
+        - name: date_from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: date_to
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Bad Request
+        '403':
+          description: Forbidden
+      security:
+        - bearerAuth: []
+    post:
+      summary: Post DOJI Gold Price
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                buy_hcm:
+                  type: number
+                sell_hcm:
+                  type: number
+                buy_hn:
+                  type: number
+                sell_hn:
+                  type: number
+      responses:
+        '201':
+          description: Created
+        '400':
+          description: Bad Request
+        '403':
+          description: Forbidden
+      security:
+        - bearerAuth: []
+
+  /api/v2/gold/pnj:
+    get:
+      summary: Get PNJ Gold Price
+      parameters:
+        - name: date_from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: date_to
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Bad Request
+        '403':
+          description: Forbidden
+      security:
+        - bearerAuth: []
+    post:
+      summary: Post PNJ Gold Price
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                buy_hcm:
+                  type: number
+                sell_hcm:
+                  type: number
+                buy_hn:
+                  type: number
+                sell_hn:
+                  type: number
+      responses:
+        '201':
+          description: Created
+        '400':
+          description: Bad Request
+        '403':
+          description: Forbidden
+      security:
+        - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
