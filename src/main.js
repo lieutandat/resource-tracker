@@ -1,4 +1,5 @@
 import './style.css';
+import './install-prompt.js';
 import { Router } from './router.js';
 import { storage } from './storage.js';
 import { createHeader, createResourceCard, createResourceList, createAddForm, createSellForm, createSellList } from './components.js';
