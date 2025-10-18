@@ -5,6 +5,7 @@ import { storage } from './storage.js';
 import { createHeader, createResourceCard, createResourceList, createAddForm, createSellForm, createSellList } from './components.js';
 import { getGoldPrice } from './goldApi.js';
 import { getCoinPrice } from './binanceApi.js';
+import { formatCurrency } from './utils.js';
 
 const app = document.getElementById('app');
 const router = new Router();
@@ -52,11 +53,11 @@ async function renderHome() {
           <div class="grid grid-cols-2 gap-4 mt-4">
             <div class="bg-blue-50 p-4 rounded-lg">
               <div class="text-sm text-blue-600 font-semibold uppercase tracking-wide">Total Value</div>
-              <div class="text-2xl font-bold text-blue-800">${totalPortfolioValue.toLocaleString()} VND</div>
+              <div class="text-2xl font-bold text-blue-800">${formatCurrency(totalPortfolioValue)} VND</div>
             </div>
             <div class="bg-${totalProfit >= 0 ? 'green' : 'red'}-50 p-4 rounded-lg">
               <div class="text-sm text-${totalProfit >= 0 ? 'green' : 'red'}-600 font-semibold uppercase tracking-wide">Total Profit</div>
-              <div class="text-2xl font-bold text-${totalProfit >= 0 ? 'green' : 'red'}-800">${totalProfit >= 0 ? '+' : ''}${totalProfit.toLocaleString()} VND</div>
+              <div class="text-2xl font-bold text-${totalProfit >= 0 ? 'green' : 'red'}-800">${totalProfit >= 0 ? '+' : ''}${formatCurrency(Math.abs(totalProfit))} VND</div>
             </div>
           </div>
         </div>
