@@ -10,7 +10,7 @@ export const storage = {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   },
 
-  addResource(type, quantity, originValue, currentValue, date = new Date(), brand = null) {
+  addResource(type, quantity, originValue, currentValue, date = new Date(), brand = null, quantityType = null) {
     const data = this.get();
     data.resources.push({
       id: Date.now(),
@@ -19,6 +19,7 @@ export const storage = {
       originValue: parseFloat(originValue),
       currentValue: parseFloat(currentValue),
       brand,
+      quantityType,
       date: date.toISOString(),
       profit: (parseFloat(currentValue) - parseFloat(originValue)) * parseFloat(quantity)
     });
@@ -28,9 +29,20 @@ export const storage = {
   updateCurrentValues(updates) {
     const data = this.get();
     data.resources.forEach(r => {
-      if (updates[r.type] && (!r.brand || updates[r.type][r.brand])) {
-        r.currentValue = r.brand ? updates[r.type][r.brand] : updates[r.type];
-        r.profit = (r.currentValue - r.originValue) * r.quantity;
+      if (updates[r.type]) {
+        if (r.type === 'gold' && r.brand && r.quantityType) {
+          const key = `${r.brand}_${r.quantityType}`;
+          if (updates[r.type][key]) {
+            r.currentValue = updates[r.type][key];
+            r.profit = (r.currentValue - r.originValue) * r.quantity;
+          }
+        } else if (r.brand && updates[r.type][r.brand]) {
+          r.currentValue = updates[r.type][r.brand];
+          r.profit = (r.currentValue - r.originValue) * r.quantity;
+        } else if (!r.brand && updates[r.type]) {
+          r.currentValue = updates[r.type];
+          r.profit = (r.currentValue - r.originValue) * r.quantity;
+        }
       }
     });
     this.save(data);
@@ -56,14 +68,16 @@ export const storage = {
     const remaining = {};
     
     resources.forEach(r => {
-      if (r.brand) {
-        remaining[r.brand] = (remaining[r.brand] || 0) + r.quantity;
+      const key = type === 'gold' ? r.quantityType : r.brand;
+      if (key) {
+        remaining[key] = (remaining[key] || 0) + r.quantity;
       }
     });
     
     sells.forEach(s => {
-      if (s.brand) {
-        remaining[s.brand] = (remaining[s.brand] || 0) - s.quantity;
+      const key = s.quantityType || s.brand;
+      if (key) {
+        remaining[key] = (remaining[key] || 0) - s.quantity;
       }
     });
     

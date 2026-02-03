@@ -6,13 +6,25 @@ import { createHeader, createResourceCard, createResourceList, createAddForm, cr
 import { getGoldPrice } from './goldApi.js';
 import { getCoinPrice } from './binanceApi.js';
 import { formatCurrency } from './utils.js';
+import { createGoldPriceDisplay } from './goldPriceDisplay.js';
 
 const app = document.getElementById('app');
 const router = new Router();
 
 // Register service worker
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js');
+  navigator.serviceWorker.register('/sw.js').then(registration => {
+    registration.addEventListener('updatefound', () => {
+      const newWorker = registration.installing;
+      newWorker.addEventListener('statechange', () => {
+        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+          if (confirm('New version available! Reload to update?')) {
+            window.location.reload();
+          }
+        }
+      });
+    });
+  });
 }
 
 async function renderHome() {
@@ -20,9 +32,10 @@ async function renderHome() {
   const goldResources = storage.getResourcesByType('gold');
   if (goldResources.length > 0) {
     const updates = { gold: {} };
-    for (const brand of ['sjc', 'doji', 'pnj']) {
-      if (goldResources.some(r => r.brand === brand)) {
-        updates.gold[brand] = await getGoldPrice(brand);
+    for (const resource of goldResources) {
+      if (resource.brand && resource.quantityType) {
+        const key = `${resource.brand}_${resource.quantityType}`;
+        updates.gold[key] = await getGoldPrice(resource.brand, resource.quantityType, 'sell');
       }
     }
     storage.updateCurrentValues(updates);
@@ -47,21 +60,6 @@ async function renderHome() {
   app.innerHTML = `
     ${createHeader('💼 Resource Tracker')}
     <main class="max-w-4xl mx-auto p-6 space-y-6">
-      ${types.length > 0 ? `
-        <div class="card p-6 text-center">
-          <h2 class="text-2xl font-bold text-gray-800 mb-2">Portfolio Overview</h2>
-          <div class="grid grid-cols-2 gap-4 mt-4">
-            <div class="bg-blue-50 p-4 rounded-lg">
-              <div class="text-sm text-blue-600 font-semibold uppercase tracking-wide">Total Value</div>
-              <div class="text-2xl font-bold text-blue-800">${formatCurrency(totalPortfolioValue)} VND</div>
-            </div>
-            <div class="bg-${totalProfit >= 0 ? 'green' : 'red'}-50 p-4 rounded-lg">
-              <div class="text-sm text-${totalProfit >= 0 ? 'green' : 'red'}-600 font-semibold uppercase tracking-wide">Total Profit</div>
-              <div class="text-2xl font-bold text-${totalProfit >= 0 ? 'green' : 'red'}-800">${totalProfit >= 0 ? '+' : ''}${formatCurrency(Math.abs(totalProfit))} VND</div>
-            </div>
-          </div>
-        </div>
-      ` : ''}
       ${types.length === 0 ? `
         <div class="card p-8 text-center">
           <div class="text-6xl mb-4">🚀</div>
@@ -79,10 +77,29 @@ async function renderHome() {
         </div>
       ` : `
         <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          ${types.map(type => {
+          ${await Promise.all(types.map(async type => {
             const brandBreakdown = (type === 'gold' || type === 'coin') ? storage.getRemainingQuantityByBrand(type) : null;
-            return createResourceCard(type, totals[type], brandBreakdown);
-          }).join('')}
+            let goldPrices = null;
+            if (type === 'gold') {
+              goldPrices = {
+                sjc: {
+                  chiBuy: await getGoldPrice('sjc', 'chi', 'buy'),
+                  chiSell: await getGoldPrice('sjc', 'chi', 'sell'),
+                  luongBuy: await getGoldPrice('sjc', 'luong', 'buy'),
+                  luongSell: await getGoldPrice('sjc', 'luong', 'sell')
+                },
+                doji: {
+                  buy: await getGoldPrice('doji', null, 'buy'),
+                  sell: await getGoldPrice('doji', null, 'sell')
+                },
+                pnj: {
+                  buy: await getGoldPrice('pnj', null, 'buy'),
+                  sell: await getGoldPrice('pnj', null, 'sell')
+                }
+              };
+            }
+            return createResourceCard(type, totals[type], brandBreakdown, goldPrices);
+          })).then(cards => cards.join(''))}
         </div>
         <div class="fixed bottom-6 right-6">
           <button id="add-menu-btn" class="btn-primary rounded-full w-14 h-14 flex items-center justify-center text-2xl shadow-2xl">
@@ -228,7 +245,7 @@ async function renderHome() {
   });
 }
 
-function renderResourceDetail(type) {
+async function renderResourceDetail(type) {
   const resources = storage.getResourcesByType(type);
   const sells = storage.getSellsByType(type);
   const remaining = type === 'gold' ? storage.getRemainingQuantityByBrand(type) : {};
@@ -241,6 +258,44 @@ function renderResourceDetail(type) {
         ${createAddForm(type)}
         ${type === 'gold' ? createSellForm(type, remaining) : ''}
       </div>
+      ${type === 'gold' ? `
+        <div class="card p-6">
+          <div class="flex items-center gap-3 mb-4">
+            <span class="text-2xl">🧮</span>
+            <h3 class="text-xl font-bold text-gray-800">Price Calculator</h3>
+          </div>
+          <div class="grid md:grid-cols-2 gap-4 mb-4">
+            ${(remaining.chi > 0) ? `
+              <div class="bg-gray-50 p-4 rounded-lg">
+                <label class="block text-sm font-semibold text-gray-700 mb-2">Chỉ Price (VND)</label>
+                <input type="number" id="calc-chi-price" class="input-field" placeholder="Enter Chỉ price">
+                <div class="text-xs text-gray-500 mt-1">Your quantity: ${remaining.chi}</div>
+              </div>
+            ` : ''}
+            ${(remaining.luong > 0) ? `
+              <div class="bg-gray-50 p-4 rounded-lg">
+                <label class="block text-sm font-semibold text-gray-700 mb-2">Lượng Price (VND)</label>
+                <input type="number" id="calc-luong-price" class="input-field" placeholder="Enter Lượng price">
+                <div class="text-xs text-gray-500 mt-1">Your quantity: ${remaining.luong}</div>
+              </div>
+            ` : ''}
+          </div>
+          <div class="grid md:grid-cols-3 gap-4">
+            <div class="bg-blue-50 p-4 rounded-lg">
+              <div class="text-sm text-blue-600 font-semibold uppercase tracking-wide mb-1">Current Value</div>
+              <div id="calc-current-value" class="text-xl font-bold text-blue-800">0 VND</div>
+            </div>
+            <div class="bg-gray-50 p-4 rounded-lg">
+              <div class="text-sm text-gray-600 font-semibold uppercase tracking-wide mb-1">Origin Value</div>
+              <div id="calc-origin-value" class="text-xl font-bold text-gray-800">0 VND</div>
+            </div>
+            <div class="bg-green-50 p-4 rounded-lg">
+              <div class="text-sm text-green-600 font-semibold uppercase tracking-wide mb-1">Profit</div>
+              <div id="calc-profit" class="text-xl font-bold text-green-800">0 VND</div>
+            </div>
+          </div>
+        </div>
+      ` : ''}
       <div class="card p-6">
         <button class="flex items-center justify-between w-full mb-4" id="toggle-purchases">
           <div class="flex items-center gap-3">
@@ -281,11 +336,16 @@ function renderResourceDetail(type) {
   document.getElementById('add-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
+    const quantityType = formData.get('quantityType');
     const brand = formData.get('brand');
-    let currentValue = formData.get('currentValue');
+    const date = formData.get('date') ? new Date(formData.get('date')) : new Date();
     
-    if (type === 'gold' && brand) {
-      currentValue = await getGoldPrice(brand);
+    let currentValue = formData.get('originValue'); // Default to origin value
+    
+    if (type === 'gold' && quantityType) {
+      currentValue = await getGoldPrice('sjc', quantityType, 'sell') || formData.get('originValue');
+    } else if (type === 'coin' && brand) {
+      currentValue = await getCoinPrice(brand) || formData.get('originValue');
     }
     
     storage.addResource(
@@ -293,8 +353,9 @@ function renderResourceDetail(type) {
       formData.get('quantity'),
       formData.get('originValue'),
       currentValue,
-      new Date(),
-      brand
+      date,
+      brand,
+      quantityType
     );
     renderResourceDetail(type);
   });
@@ -314,11 +375,13 @@ function renderResourceDetail(type) {
     e.preventDefault();
     const formData = new FormData(e.target);
     const date = formData.get('date') ? new Date(formData.get('date')) : new Date();
+    const quantityType = formData.get('quantityType');
+    
     storage.addSellTransaction(
       type,
       formData.get('quantity'),
       formData.get('sellPrice'),
-      formData.get('brand'),
+      quantityType,
       date
     );
     renderResourceDetail(type);
@@ -338,6 +401,77 @@ function renderResourceDetail(type) {
     content.classList.toggle('hidden');
     arrow.textContent = content.classList.contains('hidden') ? '▶' : '▼';
   });
+  
+  // Price calculator for gold
+  if (type === 'gold') {
+    const chiPriceInput = document.getElementById('calc-chi-price');
+    const luongPriceInput = document.getElementById('calc-luong-price');
+    const currentValueEl = document.getElementById('calc-current-value');
+    const originValueEl = document.getElementById('calc-origin-value');
+    const profitEl = document.getElementById('calc-profit');
+    
+    // Calculate total origin value for remaining quantities
+    function calculateOriginValue() {
+      const goldResources = resources.filter(r => r.quantityType);
+      
+      let totalOriginValue = 0;
+      
+      // Calculate origin value for remaining quantities only
+      goldResources.forEach(r => {
+        const remainingQty = remaining[r.quantityType] || 0;
+        if (remainingQty > 0) {
+          // Use weighted average if multiple purchases of same type
+          const sameTypePurchases = goldResources.filter(res => res.quantityType === r.quantityType);
+          const totalCost = sameTypePurchases.reduce((sum, res) => sum + (res.originValue * res.quantity), 0);
+          const totalQty = sameTypePurchases.reduce((sum, res) => sum + res.quantity, 0);
+          const avgPrice = totalQty > 0 ? totalCost / totalQty : 0;
+          
+          totalOriginValue += avgPrice * remainingQty;
+        }
+      });
+      
+      // Remove duplicates by using Set
+      const processedTypes = new Set();
+      let finalOriginValue = 0;
+      
+      Object.keys(remaining).forEach(quantityType => {
+        if (!processedTypes.has(quantityType) && remaining[quantityType] > 0) {
+          processedTypes.add(quantityType);
+          const sameTypePurchases = goldResources.filter(r => r.quantityType === quantityType);
+          if (sameTypePurchases.length > 0) {
+            const totalCost = sameTypePurchases.reduce((sum, r) => sum + (r.originValue * r.quantity), 0);
+            const totalQty = sameTypePurchases.reduce((sum, r) => sum + r.quantity, 0);
+            const avgPrice = totalQty > 0 ? totalCost / totalQty : 0;
+            finalOriginValue += avgPrice * remaining[quantityType];
+          }
+        }
+      });
+      
+      return finalOriginValue;
+    }
+    
+    function updateCalculation() {
+      const chiPrice = parseFloat(chiPriceInput?.value) || 0;
+      const luongPrice = parseFloat(luongPriceInput?.value) || 0;
+      
+      const chiValue = chiPrice * (remaining.chi || 0);
+      const luongValue = luongPrice * (remaining.luong || 0);
+      const totalCurrentValue = chiValue + luongValue;
+      const totalOriginValue = calculateOriginValue();
+      const profit = totalCurrentValue - totalOriginValue;
+      
+      currentValueEl.textContent = `${totalCurrentValue.toLocaleString()} VND`;
+      originValueEl.textContent = `${totalOriginValue.toLocaleString()} VND`;
+      profitEl.textContent = `${profit >= 0 ? '+' : ''}${profit.toLocaleString()} VND`;
+      profitEl.className = `text-xl font-bold ${profit >= 0 ? 'text-green-800' : 'text-red-800'}`;
+    }
+    
+    chiPriceInput?.addEventListener('input', updateCalculation);
+    luongPriceInput?.addEventListener('input', updateCalculation);
+    
+    // Initialize display
+    updateCalculation();
+  }
 }
 
 // Setup routes

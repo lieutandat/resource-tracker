@@ -15,7 +15,7 @@ async function getApiKey() {
   return apiKey;
 }
 
-export async function getGoldPrice(brand) {
+export async function getGoldPrice(brand, quantityType, transactionType) {
   try {
     const key = await getApiKey();
     const response = await fetch(`${API_BASE}/api/v2/gold/${brand}`, {
@@ -25,8 +25,16 @@ export async function getGoldPrice(brand) {
     
     if (data.results && data.results.length > 0) {
       const latest = data.results[0];
-      if (brand === 'pnj') return latest.buy_nhan_24k || 0;
-      return latest.buy_1l || latest.buy_hcm || 0;
+      
+      if (brand === 'sjc') {
+        if (quantityType === 'chi') {
+          return transactionType === 'buy' ? latest.sell_nhan1c : latest.buy_nhan1c;
+        } else {
+          return transactionType === 'buy' ? latest.sell_1l : latest.buy_1l;
+        }
+      } else if (brand === 'doji' || brand === 'pnj') {
+        return transactionType === 'buy' ? latest.sell_hcm : latest.buy_hcm;
+      }
     }
     return 0;
   } catch (error) {
